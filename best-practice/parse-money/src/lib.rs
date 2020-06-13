@@ -1,10 +1,18 @@
 use std::num::ParseFloatError;
 
-fn parse_money(input: &str) -> Result<(f32, String), ParseFloatError> {
+#[derive(Debug)]
+pub enum MoneyError {
+   ParseError,
+}
+
+fn parse_money(input: &str) -> Result<(f32, String), MoneyError> {
     let parts: Vec<&str> = input.split_whitespace().collect();
-    let maybe_amount = parts[0].parse()?;
-    let currency = parts[1].to_string();
-    return Ok((maybe_amount, currency));
+    if parts.len() != 2 {
+        Err(MoneyError::ParseError)
+    } else {
+        let (amount, currency) = (parts[0], parts[1]);
+        Ok((amount.parse()?, currency.to_string()))
+    }
 }
 
 #[cfg(test)]
@@ -23,5 +31,10 @@ mod tests {
         let (money, unit) = parse_money("140.01 Euro").unwrap();
         assert_eq!(money, 140.01f32);
         assert_eq!("Euro", unit);
+    }
+
+    #[test]
+    fn parse_index_out_of_bounds() {
+        let (money, unit) = parse_money("140.01").unwrap();
     }
 }
