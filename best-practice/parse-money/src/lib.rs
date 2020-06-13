@@ -1,11 +1,8 @@
 fn parse_money(input: &str) -> (i32, String) {
     let parts: Vec<&str> = input.split_whitespace().collect();
-    let maybe_amount = parts[0].parse();
-    if maybe_amount.is_err() {
-        return (-1, "invalid".to_string());
-    }
+    let maybe_amount = parts[0].parse().unwrap();
     let currency = parts[1].to_string();
-    return (maybe_amount.unwrap(), currency);
+    return (maybe_amount, currency);
 }
 
 
