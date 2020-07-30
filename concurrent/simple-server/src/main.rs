@@ -15,7 +15,15 @@ use {
 };
 
 async fn serve_req(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
-    Ok(Response::new(Body::from("Hello world")))
+    println!("Got request at {:?}", _req.uri());
+
+    let url_str = "http://www.rust-lang.org/en-US/";
+    let url = url_str.parse::<Uri>().expect("failed to parse URL");
+
+    let res = Client::new().get(url).await?;
+    // Return the result of the request directly to the user
+    println!("request finished-- returning response");
+    Ok(res)
 }
 
 async fn run_server(addr: SocketAddr) {
