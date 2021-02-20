@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+	"cal-bin",
+	"cal-lib"
+]
