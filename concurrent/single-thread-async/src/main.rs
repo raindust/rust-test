@@ -23,6 +23,7 @@ fn main() {
                     Err(e) => println!("ERROR: {}", e),
                 }
             });
+            executor.run();
 
             shared_state = state;
             shared_state.lock().unwrap().waker = Some(waker);
