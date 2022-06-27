@@ -10,7 +10,6 @@ pub struct MsgFuture {
 
 #[derive(Debug, Default)]
 pub struct MsgState {
-    pub seq_number: u32,
     pub msg: Option<String>,
     /// The waker for the task that `TimerFuture` is running on.
     /// The thread can use this after setting `completed = true` to tell
@@ -39,9 +38,8 @@ impl Future for MsgFuture {
 }
 
 impl MsgFuture {
-    pub fn new(seq_number: u32) -> (Self, SharedState) {
+    pub fn new() -> (Self, SharedState) {
         let state = Arc::new(Mutex::new(MsgState {
-            seq_number,
             msg: None,
             waker: None,
         }));

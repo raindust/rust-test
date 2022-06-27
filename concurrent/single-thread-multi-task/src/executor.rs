@@ -5,10 +5,7 @@ use futures::{
 };
 use std::{
     collections::HashMap,
-    sync::{
-        mpsc::{sync_channel, Receiver, SyncSender},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
     task::{Context, Waker},
 };
 
@@ -124,12 +121,24 @@ impl Executor {
                 }
             }
 
-            self.push_tasks(seq_number, pending_tasks);
+            if pending_tasks.is_empty() {
+                self.push_tasks(seq_number, pending_tasks);
+            }
+            self.remove_timeout(seq_number);
         }
     }
 
     fn take_tasks(&self, seq_number: u32) -> Option<Vec<Arc<Task>>> {
-        self.ready_queue.lock().unwrap().remove(&seq_number)
+        let mut queue = self.ready_queue.lock().unwrap();
+        // println!("@@ queue length: {}", queue.len());
+        queue.remove(&seq_number)
+    }
+
+    fn remove_timeout(&self, seq_number: u32) {
+        self.ready_queue
+            .lock()
+            .unwrap()
+            .retain(|k, _| k + 20 > seq_number);
     }
 
     fn push_tasks(&self, seq_number: u32, tasks: Vec<Arc<Task>>) {

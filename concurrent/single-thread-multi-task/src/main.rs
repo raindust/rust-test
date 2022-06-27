@@ -1,5 +1,5 @@
 use executor::{new_executor_and_spawner, Spawner};
-use msg_future::{MsgFuture, MsgState};
+use msg_future::{MsgFuture, MsgState, SharedState};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -11,32 +11,38 @@ pub mod msg_future;
 
 fn main() {
     let (executor, spawner) = new_executor_and_spawner();
-    let mut shared_state_map: HashMap<u32, Arc<Mutex<MsgState>>> = Default::default();
+    let mut shared_state_map: HashMap<u32, SharedState> = Default::default();
 
     for seq_number in 0..100 {
-        if seq_number % 4 == 0 || seq_number % 4 == 1 {
-            let (future, state) = MsgFuture::new(seq_number);
-
+        if seq_number % 4 == 0 || seq_number % 4 == 1 || seq_number % 4 == 2 {
+            let (future, state) = MsgFuture::new();
             let waker = send_async(seq_number, future, &spawner);
 
             state.lock().unwrap().waker = Some(waker);
             shared_state_map.insert(seq_number, state);
         } else {
-            let keys: Vec<u32> = shared_state_map.keys().map(|v| *v).collect();
-
-            for num in keys {
-                if let Some(state) = shared_state_map.remove(&num) {
-                    if let Some(waker) = try_get_waker(num, seq_number, &state) {
-                        waker.wake();
-                        executor.run(num);
-                    } else {
-                        println!("failed to get waker of {}", seq_number - 1);
-                    }
-                } else {
-                    println!("failed to get waker of {}", seq_number - 1);
-                }
-            }
+            run(seq_number - 3, seq_number, &executor, &mut shared_state_map);
+            run(seq_number - 2, seq_number, &executor, &mut shared_state_map);
+            run(seq_number - 1, seq_number, &executor, &mut shared_state_map);
         }
+    }
+}
+
+fn run(
+    key: u32,
+    seq_number: u32,
+    executor: &executor::Executor,
+    shared_state_map: &mut HashMap<u32, SharedState>,
+) {
+    if let Some(state) = shared_state_map.remove(&key) {
+        if let Some(waker) = try_get_waker(key, seq_number, &state) {
+            waker.wake();
+            executor.run(key);
+        } else {
+            println!("failed to get waker of {}", seq_number - 1);
+        }
+    } else {
+        println!("failed to get waker of {}", seq_number - 1);
     }
 }
 
