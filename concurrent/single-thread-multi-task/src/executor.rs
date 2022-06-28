@@ -83,15 +83,11 @@ impl ArcWake for Task {
         // Implement `wake` by sending this task back onto the task channel
         // so that it will be polled again by the executor.
         let cloned = arc_self.clone();
-        if let Some(container) = arc_self
-            .task_sender
-            .lock()
-            .unwrap()
-            .get_mut(&cloned.seq_number)
-        {
+        let mut task_sender = arc_self.task_sender.lock().unwrap();
+        if let Some(container) = task_sender.get_mut(&cloned.seq_number) {
             container.push(cloned);
         } else {
-            println!("failed to get task sender of {}", cloned.seq_number);
+            task_sender.insert(cloned.seq_number, vec![cloned]);
         }
     }
 }
