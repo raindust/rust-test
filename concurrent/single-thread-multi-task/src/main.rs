@@ -1,9 +1,9 @@
 use executor::{new_executor_and_spawner, Spawner};
-use futures::executor::block_on;
+use futures::{executor::block_on, Future};
 use msg_future::{MsgFuture, MsgState, SharedState};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{mpsc::sync_channel, Arc, Mutex},
     task::Waker,
     time::Duration,
     vec,
@@ -20,7 +20,7 @@ fn main() {
 
     for seq_number in 0..100 {
         if seq_number % 4 == 0 || seq_number % 4 == 1 || seq_number % 4 == 2 {
-            block_on(async_handler(seq_number, &spawner, &mut shared_state_map));
+            block_on(sync_handler(seq_number, &spawner, &mut shared_state_map));
         } else {
             run(seq_number - 3, seq_number, &executor, &mut shared_state_map);
             run(seq_number - 2, seq_number, &executor, &mut shared_state_map);
@@ -55,28 +55,19 @@ fn try_get_waker(key: u32, seq_number: u32, shared_state: &Arc<Mutex<MsgState>>)
     state.waker.clone()
 }
 
-async fn async_handler(seq_number: u32, spawner: &Spawner, shared_state_map: &mut SharedStateMap) {
-    let (future, state) = MsgFuture::new();
-    let waker = send_async(seq_number, future, spawner);
-
-    state.lock().unwrap().waker = Some(waker);
-    add_state(seq_number, state, shared_state_map);
+async fn sync_handler(seq_number: u32, spawner: &Spawner, shared_state_map: &mut SharedStateMap) {
+    send_sync(seq_number, spawner, shared_state_map, print_msg);
 
     if seq_number % 2 == 1 {
-        another_async_handler(seq_number, spawner, shared_state_map).await;
+        send_sync(seq_number, spawner, shared_state_map, print_msg);
+        // replace `send_sync` with `async_handler` will dead lock
+        // async_handler(seq_number, spawner, shared_state_map).await;
     }
 }
 
-async fn another_async_handler(
-    seq_number: u32,
-    spawner: &Spawner,
-    shared_state_map: &mut SharedStateMap,
-) {
-    let (future, state) = MsgFuture::new();
-    let waker = send_async(seq_number, future, spawner);
-
-    state.lock().unwrap().waker = Some(waker);
-    add_state(seq_number, state, shared_state_map);
+async fn async_handler(seq_number: u32, spawner: &Spawner, shared_state_map: &mut SharedStateMap) {
+    let msg = send_async(seq_number, spawner, shared_state_map).await;
+    print_msg(msg).await;
 }
 
 fn add_state(seq_number: u32, state: SharedState, shared_state_map: &mut SharedStateMap) {
@@ -88,17 +79,52 @@ fn add_state(seq_number: u32, state: SharedState, shared_state_map: &mut SharedS
     }
 }
 
-fn send_async(seq_number: u32, future: MsgFuture, spawner: &Spawner) -> Waker {
+async fn print_msg(msg: Result<String, String>) {
+    match msg {
+        Ok(m) => println!("{}", m),
+        Err(e) => println!("ERROR: {}", e),
+    }
+}
+
+fn send_sync<Handler, Fut>(
+    seq_number: u32,
+    spawner: &Spawner,
+    shared_state_map: &mut SharedStateMap,
+    handler: Handler,
+) where
+    Handler: Fn(Result<String, String>) -> Fut + Sync + Send + 'static,
+    Fut: Future<Output = ()> + Sync + Send + 'static,
+{
+    let (future, state) = MsgFuture::new();
+
     let waker = spawner.spawn(seq_number, async move {
         let msg = future.await;
-        match msg {
-            Ok(m) => println!("{}", m),
-            Err(e) => println!("ERROR: {}", e),
-        }
+        handler(msg).await;
         wait_and_print().await;
     });
 
-    waker
+    state.lock().unwrap().waker = Some(waker);
+    add_state(seq_number, state, shared_state_map);
+}
+
+async fn send_async(
+    seq_number: u32,
+    spawner: &Spawner,
+    shared_state_map: &mut SharedStateMap,
+) -> Result<String, String> {
+    let (future, state) = MsgFuture::new();
+
+    let (sender, receiver) = sync_channel(1);
+    let waker = spawner.spawn(seq_number, async move {
+        let msg = future.await;
+        wait_and_print().await;
+        sender.send(msg).expect("");
+    });
+
+    state.lock().unwrap().waker = Some(waker);
+    add_state(seq_number, state, shared_state_map);
+
+    receiver.recv().map_err(|e| e.to_string())?
 }
 
 async fn wait_and_print() {
