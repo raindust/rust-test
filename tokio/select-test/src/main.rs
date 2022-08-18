@@ -6,21 +6,19 @@ async fn main() {
     let (tx2, rx2) = oneshot::channel();
 
     tokio::spawn(async {
-        let _ = tx1.send("one".to_string());
+        let _ = tx1.send("one");
     });
 
     tokio::spawn(async {
-        let _ = tx2.send("two".to_string());
+        let _ = tx2.send("two");
     });
 
-    loop {
-        tokio::select! {
-            val = rx1 => {
-                println!("rx1 completed first with {:?}", val);
-            }
-            val = rx2 => {
-                println!("rx2 completed first with {:?}", val);
-            }
+    tokio::select! {
+        val = rx1 => {
+            println!("rx1 completed first with {:?}", val);
+        }
+        val = rx2 => {
+            println!("rx2 completed first with {:?}", val);
         }
     }
 }
